@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ClipboardIcon, BookmarkIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ClipboardIcon, BookmarkIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, PencilIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { tweetsFromPost } from './services/claude'
 import { saveTweet, getSavedTweets, deleteSavedTweet, type SavedTweet } from './services/supabase'
 import './App.css'
@@ -11,6 +11,41 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(384) // 384px = 24rem = w-96
+  const [isResizing, setIsResizing] = useState(false)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editedTweet, setEditedTweet] = useState('')
+
+  // Add resize handlers
+  const startResizing = (e: React.MouseEvent) => {
+    setIsResizing(true)
+    e.preventDefault()
+  }
+
+  const stopResizing = () => {
+    setIsResizing(false)
+  }
+
+  const resize = (e: MouseEvent) => {
+    if (isResizing && !isSidebarCollapsed) {
+      const width = window.innerWidth - e.clientX
+      // Set min and max width constraints
+      const newWidth = Math.min(Math.max(width, 300), 600)
+      setSidebarWidth(newWidth)
+    }
+  }
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize)
+      window.addEventListener('mouseup', stopResizing)
+      return () => {
+        window.removeEventListener('mousemove', resize)
+        window.removeEventListener('mouseup', stopResizing)
+      }
+    }
+  }, [isResizing])
 
   useEffect(() => {
     loadSavedTweets()
@@ -67,6 +102,14 @@ function App() {
     }
   }
 
+  // Add new function to handle textarea resize
+  const handleTextAreaResize = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const textarea = e.target
+    textarea.style.height = 'auto' // Reset height to recalculate
+    textarea.style.height = `${textarea.scrollHeight}px`
+    setEditedTweet(e.target.value)
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="flex">
@@ -107,38 +150,95 @@ function App() {
                         key={index}
                         className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col"
                       >
-                        <p className="text-gray-800 flex-grow">{tweet}</p>
-                        <div className="flex justify-between items-center mt-4">
-                          <span className="text-gray-400 text-sm">{tweet.length}/280</span>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleCopy(tweet, index)}
-                              className="px-2 py-1 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-1"
-                            >
-                              <ClipboardIcon className="h-4 w-4" />
-                              {copiedIndex === index && <span>Copied!</span>}
-                            </button>
-                            <button
-                              onClick={() => handleSaveTweet(tweet)}
-                              disabled={isSaving}
-                              className="px-2 py-1 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-1"
-                            >
-                              <BookmarkIcon className="h-4 w-4" />
-                              Save
-                            </button>
-                            <a 
-                              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-1 text-sm font-medium text-[#1DA1F2] bg-white rounded-lg border border-[#1DA1F2] hover:bg-[#1DA1F2] hover:text-white gap-1.5"
-                            >
-                              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
-                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                              </svg>
-                              Post
-                            </a>
+                        {editingIndex === index ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              value={editedTweet}
+                              onChange={handleTextAreaResize}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 overflow-hidden"
+                              style={{ 
+                                whiteSpace: 'pre-wrap',
+                                resize: 'none',
+                                minHeight: '5rem'
+                              }}
+                              onFocus={(e) => {
+                                // Set initial height when focusing
+                                e.target.style.height = 'auto'
+                                e.target.style.height = `${e.target.scrollHeight}px`
+                              }}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingIndex(null)
+                                  setEditedTweet('')
+                                }}
+                                className="px-2 py-1 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-1"
+                              >
+                                <XMarkIcon className="h-4 w-4" />
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const newTweets = [...tweets]
+                                  newTweets[index] = editedTweet
+                                  setTweets(newTweets)
+                                  setEditingIndex(null)
+                                  setEditedTweet('')
+                                }}
+                                className="px-2 py-1 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 flex items-center gap-1"
+                              >
+                                <CheckIcon className="h-4 w-4" />
+                                Save
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <>
+                            <p className="text-gray-800 flex-grow whitespace-pre-wrap">{tweet}</p>
+                            <div className="flex justify-between items-center mt-4">
+                              <span className="text-gray-400 text-sm">{tweet.length}/280</span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleCopy(tweet, index)}
+                                  className="px-2 py-1 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-1"
+                                >
+                                  <ClipboardIcon className="h-4 w-4" />
+                                  {copiedIndex === index && <span>Copied!</span>}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingIndex(index)
+                                    setEditedTweet(tweet)
+                                  }}
+                                  className="px-2 py-1 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-1"
+                                >
+                                  <PencilIcon className="h-4 w-4" />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleSaveTweet(tweet)}
+                                  disabled={isSaving}
+                                  className="px-2 py-1 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-1"
+                                >
+                                  <BookmarkIcon className="h-4 w-4" />
+                                  Save
+                                </button>
+                                <a 
+                                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center px-3 py-1 text-sm font-medium text-[#1DA1F2] bg-white rounded-lg border border-[#1DA1F2] hover:bg-[#1DA1F2] hover:text-white gap-1.5"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                  </svg>
+                                  Post
+                                </a>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -148,13 +248,37 @@ function App() {
           </div>
         </div>
 
+        {/* Resize Handle */}
+        <div
+          className={`w-1 hover:bg-indigo-500 hover:w-1 cursor-col-resize ${isResizing ? 'bg-indigo-500' : 'bg-transparent'}`}
+          onMouseDown={startResizing}
+        />
+
         {/* Saved Tweets Sidebar */}
-        <div className="w-96 bg-white border-l border-gray-200 p-6 overflow-y-auto h-screen sticky top-0">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Saved Tweets</h2>
-          <div className="space-y-4">
+        <div 
+          className={`${isSidebarCollapsed ? 'w-16' : ''} bg-white border-l border-gray-200 p-6 overflow-y-auto h-screen sticky top-0 ${isResizing ? '' : 'transition-all duration-300'}`}
+          style={{ width: isSidebarCollapsed ? '4rem' : `${sidebarWidth}px` }}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              {isSidebarCollapsed ? (
+                <ChevronLeftIcon className="h-5 w-5" />
+              ) : (
+                <ChevronRightIcon className="h-5 w-5" />
+              )}
+            </button>
+            <h2 className={`text-xl font-semibold text-gray-900 ${isSidebarCollapsed ? 'hidden' : ''}`}>
+              Saved Tweets
+            </h2>
+            <div className="w-7"></div>
+          </div>
+          <div className={`space-y-4 ${isSidebarCollapsed ? 'hidden' : ''}`}>
             {savedTweets.map((tweet) => (
               <div key={tweet.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <p className="text-gray-800 mb-3">{tweet.content}</p>
+                <p className="text-gray-800 mb-3 whitespace-pre-wrap">{tweet.content}</p>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">
                     {new Date(tweet.created_at).toLocaleDateString()}
